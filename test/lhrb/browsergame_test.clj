@@ -1,6 +1,6 @@
 (ns lhrb.browsergame-test
   (:require [clojure.test :refer :all]
-            [lhrb.browsergame :refer :all]
+            [lhrb.browsergame :as sut]
             [clojure.spec.gen.alpha :as gen]
             [clojure.spec.alpha :as s]))
 
@@ -11,7 +11,7 @@
 
 (deftest calc-dmg
   (testing "dmg calculation"
-    (is (= 0 (dmg {:turn/evasion :success})))
-    (is (= 0 (dmg {:turn/strike :fail})))
-    (is (= 0 (dmg {:turn/evasion :fail
-                   :turn/strike :fail})))))
+    (is (= 0 (sut/calc-dmg {:turn/evasion :success})))
+    (is (= 0 (sut/calc-dmg {:turn/strike :fail})))
+    (is (= 0 (sut/calc-dmg {:turn/evasion :fail
+                            :turn/strike :fail})))))

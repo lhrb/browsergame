@@ -114,7 +114,7 @@
     {}
     turn))
 
-(defn dmg
+(defn calc-dmg
   [{:keys [:turn/strike
            :turn/damage
            :turn/damage-bonus
@@ -140,7 +140,7 @@
       :test2 [:bonus :lizard :rock]
       :test 15})
 
-  (dmg
+  (calc-dmg
    #:turn{:evasion :fail,
           :mitigation 0.69,
           :damage 63,
@@ -157,7 +157,7 @@
     (->>
      (turn-data u1 u2)
      (apply-fx mfx)
-     (dmg)))
+     (calc-dmg)))
   ,)
 
 ;; ------------------------------------------------------------;;
@@ -226,37 +226,3 @@
          (get (first b) :time))))
      (map unit-timeline units))))
   ,)
-
-
-(defn atk-dmg
-  [{:keys [:unit/accuracy
-           :unit/damage
-           :unit/critical-chance
-           :unit/critical-multiplier]}]
-  (*
-   (if (<= (rand) accuracy)
-     1 0)
-   damage
-   (if (<= (rand) critical-chance)
-     critical-multiplier 1)))
-
-(comment
-
- (atk-dmg
-  (gen/generate
-   (s/gen :unit/unit)))
-
- (gen/generate (s/gen :unit/class))
-
- (def a {:unit/speed 2
-         :unit/health 100})
-
- (def b {:unit/speed 4
-         :unit/health 50})
-
-
-
-
-
-
- ,)

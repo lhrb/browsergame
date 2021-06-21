@@ -23,7 +23,7 @@
 (def unit-class
   [:rock :paper :scissors :lizard :spock])
 
-(defn bonus?
+(defn rock-paper-scissor
   "rock-paper-scissor-lizard-spock
 
   wikipedia: modeled by a comparison of the parity
@@ -43,13 +43,13 @@
         (if (< a# b#) class-b class-a)))))
 
 (s/def :unit/name string?)
-(s/def :unit/health nat-int?)
-(s/def :unit/damage nat-int?)
+(s/def :unit/health (s/int-in 100 1001))
+(s/def :unit/damage (s/int-in 20 200))
 (s/def :unit/speed nat-int?)
-(s/def :unit/accuracy percent?)
+(s/def :unit/accuracy (s/and percent? #(<= 0.8 %)))
 (s/def :unit/critical-chance percent?)
 (s/def :unit/critical-multiplier percent-multiplier?)
-(s/def :unit/evasion percent?)
+(s/def :unit/evasion (s/and percent? #(>= 0.2 %)))
 (s/def :unit/survival percent?)
 (s/def :unit/mitigation percent?)
 (s/def :unit/class (into #{} unit-class))
@@ -69,8 +69,6 @@
     :unit/mitigation
     :unit/class]))
 
-(gen/generate (s/gen :unit/unit))
-
 (defn roll-dice
   [success-prob]
   ;; TODO implement own version of rand: seed + (rand) -> [0,1]
@@ -79,18 +77,30 @@
     :success
     :fail))
 
-(defn calc-turn
+(defn bonus [class-a class-b]
+  (if (= (rock-paper-scissor class-a class-b) :class-a)
+    :success
+    :fail))
+
+(def mfx
+  {:roll-dice   #'roll-dice
+   :bonus       #'bonus})
+
+(defn turn-data
   [unit-a unit-b]
   #:turn{:from      (:unit/name unit-a)
          :to        (:unit/name unit-b)
          :strike    [:roll-dice (:unit/accuracy unit-a)]
          :damage    (:unit/damage unit-a)
-         :bonus     (bonus?
-                     (:unit/class unit-a)
-                     (:unit/class unit-b))
+         :damage-bonus [:bonus
+                        (:unit/class unit-a)
+                        (:unit/class unit-b)]
          :critical  [:roll-dice (:unit/critical-chance unit-a)]
          :critical-multiplier (:unit/critical-multiplier unit-a)
          :mitigation (:unit/mitigation unit-b)
+         :mitigation-bonus [:bonus
+                            (:unit/class unit-b)
+                            (:unit/class unit-a)]
          :evasion [:roll-dice (:unit/evasion unit-b)]})
 
 (defn apply-fx
@@ -99,17 +109,55 @@
     (fn [m k v]
       (assoc m k
        (match [v]
-              [[(f :guard #(get mfx %)) n]] ((f mfx) n)
+              [[(f :guard #(get mfx %)) & n]] (apply (f mfx) n)
               :else v)))
     {}
     turn))
 
+(defn dmg
+  [{:keys [:turn/strike
+           :turn/damage
+           :turn/damage-bonus
+           :turn/critical
+           :turn/critical-multiplier
+           :turn/evasion
+           :turn/mitigation
+           :turn/mitigation-bonus]}]
+  (if (or
+       (= strike :fail)
+       (= evasion :success))
+    0
+    (* damage
+       (if (= damage-bonus :success) damage-bonus 1)
+       (if (= critical :success) critical-multiplier 1)
+       (if (= mitigation-bonus :success) 0.5 1)
+       (- 1 mitigation))))
+
 (comment
-  (let [mfx {:roll-dice #'roll-dice}]
-    (apply-fx
+  (apply-fx
      mfx
      {:bonus [:roll-dice 1]
-      :test 15}))
+      :test2 [:bonus :lizard :rock]
+      :test 15})
+
+  (dmg
+   #:turn{:evasion :fail,
+          :mitigation 0.69,
+          :damage 63,
+          :strike :success,
+          :from "3By45VUNCNlG3gge9E",
+          :damage-bonus :fail,
+          :mitigation-bonus :fail,
+          :critical :fail,
+          :to "k",
+          :critical-multiplier 1.5})
+
+  (let [u1 (gen/generate (s/gen :unit/unit))
+        u2 (gen/generate (s/gen :unit/unit))]
+    (->>
+     (turn-data u1 u2)
+     (apply-fx mfx)
+     (dmg)))
   ,)
 
 ;; ------------------------------------------------------------;;

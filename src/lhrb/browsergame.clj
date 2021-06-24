@@ -43,6 +43,7 @@
         (if (< a# b#) class-a class-b)
         (if (< a# b#) class-b class-a)))))
 
+(s/def :unit/id (s/and string? #(>= (.length %) 8)))
 (s/def :unit/name string?)
 (s/def :unit/health (s/int-in 100 1001))
 (s/def :unit/damage (s/int-in 20 200))
@@ -54,11 +55,16 @@
 (s/def :unit/survival percent?)
 (s/def :unit/mitigation percent?)
 (s/def :unit/class (into #{} unit-class))
+(comment
+ ;; in combat specs
+  (s/def :unit/faction #{:attacker :defender})
+  ,)
 
 (s/def :unit/unit
   (s/keys
    :req
-   [:unit/name
+   [:unit/id
+    :unit/name
     :unit/health
     :unit/damage
     :unit/speed
@@ -89,8 +95,8 @@
 
 (defn turn-data
   [unit-a unit-b]
-  #:turn{:from      (:unit/name unit-a)
-         :to        (:unit/name unit-b)
+  #:turn{:from      (:unit/id unit-a)
+         :to        (:unit/id unit-b)
          :strike    [:roll-dice (:unit/accuracy unit-a)]
          :damage    (:unit/damage unit-a)
          :damage-bonus [:bonus
@@ -129,7 +135,7 @@
        (= evasion :success))
     0
     (* damage
-       (if (= damage-bonus :success) damage-bonus 1)
+       (if (= damage-bonus :success) 1.5 1)
        (if (= critical :success) critical-multiplier 1)
        (if (= mitigation-bonus :success) 0.5 1)
        (- 1 mitigation))))
@@ -225,9 +231,9 @@
      '(0.25 0.5 0.3))))
 
   (let [units [{:id 1
-               :speed 2}
+               :unit/speed 2}
               {:id 2
-               :speed 4}]]
+               :unit/speed 4}]]
    (take 15
     (apply
      (merge-by
@@ -238,49 +244,7 @@
      (map unit-timeline units))))
   ,)
 
-
-(comment
-  (gen/generate (s/gen :unit/unit))
-  (require 'sc.api)
-
-  (def combat
-    {:attacker [#:unit{:class :spock,
-                       :critical-multiplier 1.05,
-                       :mitigation 0.39,
-                       :speed 59,
-                       :evasion 0.11,
-                       :accuracy 0.88,
-                       :name "0kES",
-                       :survival 0.56,
-                       :critical-chance 0.85,
-                       :damage 148,
-                       :health 477},
-                #:unit{:class :lizard,
-                       :critical-multiplier 1.51,
-                       :mitigation 0.92,
-                       :speed 10880386,
-                       :evasion 0.03,
-                       :accuracy 0.82,
-                       :name "A8szzzA",
-                       :survival 0.5,
-                       :critical-chance 0.91,
-                       :damage 21,
-                       :health 903}]
-     :defender  [#:unit{:class :rock,
-                        :critical-multiplier 1.61,
-                        :mitigation 0.12,
-                        :speed 4,
-                        :evasion 0.18,
-                        :accuracy 0.85,
-                        :name "wwouOQR06K",
-                        :survival 0.66,
-                        :critical-chance 0.99,
-                        :damage 142,
-                        :health 715}]})
-
-  (s/def :unit/faction #{:attacker :defender})
-
-  (defn prepare-for-combat
+(defn prepare-for-combat
     "add a faction (:attacker or :defender) and
   current health prop based on the health prop"
     [faction unit]
@@ -288,93 +252,101 @@
         (assoc :unit/faction faction)
         (assoc :unit/current-health (:unit/health unit))))
 
-  (defn faction?
-    "binds given faction to a predicate, which checks if an entity is the same"
-    [faction]
-    (fn is-faction? [x]
-      (= faction (:unit/faction x))))
+(defn init-combat [attacker defender]
+    {:units (into
+             []
+             (concat
+              (map
+               (partial prepare-for-combat :attacker)
+               attacker)
+              (map
+               (partial prepare-for-combat :defender)
+               defender)))
+     :log []
+     :defeated #{}})
 
-  (defn faction-defeated?
-    "checks if all units of one faction have zero or less current-health"
-    [units]
-    (let [all-defeated
-          (fn [faction units]
-            (->> units
-                 (filter (faction? faction))
-                 (map :unit/current-health)
-                 (every? #(<= % 0))))]
-     (or
-      (all-defeated :defender units)
-      (all-defeated :attacker units))))
+(defn faction?
+  "binds given faction to a predicate, which checks if an entity is the same"
+  [faction]
+  (fn is-faction? [x]
+    (= faction (:unit/faction x))))
 
-  (defn find-target
-    "current strategy: find unit with lowest health.
+(defn faction-defeated?
+  "checks if all units of one faction have zero or less current-health"
+  [units]
+  (let [all-defeated
+        (fn [faction units]
+          (->> units
+               (filter (faction? faction))
+               (map :unit/current-health)
+               (every? #(<= % 0))))]
+    (or
+     (all-defeated :defender units)
+     (all-defeated :attacker units))))
+
+(defn find-target
+  "current strategy: find unit with lowest health.
   TODO implement more sophisticated strategy"
-    [faction units]
-   (->> units
-        (filter (faction? faction))
-        (remove
-         (fn [x] (>= 0 (:unit/current-health x))))
-        (apply min-key :unit/current-health)))
+  [faction units]
+  (->> units
+       (filter (faction? faction))
+       (remove
+        (fn [x] (>= 0 (:unit/current-health x))))
+       (apply min-key :unit/current-health)))
 
-  (defn opponent-faction
-    [faction]
-    (if (= :attacker faction)
-      :defender
-      :attacker))
+(defn opponent-faction
+  [faction]
+  (if (= :attacker faction)
+    :defender
+    :attacker))
 
-  (defn simulate-combat
-    [attacker defender]
-    (let [units (into []
-                 (concat
-                  (map
-                   (partial prepare-for-combat :attacker)
-                   attacker)
-                  (map
-                   (partial prepare-for-combat :defender)
-                   defender)))
-          timeline (get-timeline units)
-          unit (:unit (first timeline))
-          target (find-target
-                  (opponent-faction
-                   (:unit/faction unit))
-                  units)]
-      (->>
-       (turn-data unit target)
-       (apply-fx mfx))))
+(defn defeated? [unit]
+  (>= 0 (:unit/current-health unit)))
 
-  (simulate-combat
-   (:attacker combat)
-   (:defender combat))
-
-  (def units *1)
-  (sp/transform
-   [sp/ALL #(= (:unit/name %) "0kES")]
-   #(assoc % :unit/current-health 0)
-   u)
-
-  (rock-paper-scissor :lizard :rock)
-
-
-  (->> u
-       (filter (faction? :attacker))
-       (apply min-key :unit/current-health))
-
-
-
-  (faction-defeated?
+(defn calc-turn
+  [turn combat]
+  (->
    (sp/transform
-    [sp/ALL (faction? :defender)]
-    #(assoc % :unit/current-health 0) u))
+    [:units sp/ALL #(= (:unit/id %) (:turn/to turn))]
+    #(update % :unit/current-health
+             (fn [x] (- x (calc-dmg turn))))
+    combat)
+   (update :log conj turn)
+   ((fn [cmb]
+      (assoc cmb :defeated
+             (->> (:units cmb)
+                  (filter defeated?)
+                  (map :unit/id)
+                  (into #{})))))))
 
-  (let [timeline (get-timeline
-                  (concat
-                   (:attacker combat)
-                   (:defender combat)))]
-    (take 5 timeline))
+(defn simulate-combat
+  [attacker defender]
+  (loop [combat (init-combat attacker defender)
+         timeline (get-timeline (:units combat))]
+    (if (faction-defeated? (:units combat))
+      combat
+      (let [unit (:unit (first timeline))
+            target (find-target
+                    (opponent-faction
+                     (:unit/faction unit))
+                    (:units combat))
+            turn  (->>
+                   (turn-data unit target)
+                   (apply-fx mfx))
+            combat' (calc-turn turn combat)]
+        (recur combat'
+               (rest
+                (remove
+                 (fn [unit]
+                   ((:defeated combat) (:unit/id unit)))
+                 timeline)))))))
 
+(comment
+  (gen/generate (s/gen :unit/unit))
+  (require 'sc.api)
+  
+  (simulate-combat
+   (gen/sample (s/gen :unit/unit) 2)
+   (gen/sample (s/gen :unit/unit) 1))
 
-  (take 5
-   (get-timeline
-        (concat (:attacker combat) (:defender combat))))
   ,)

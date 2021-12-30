@@ -55,10 +55,8 @@
 (s/def :unit/survival percent?)
 (s/def :unit/mitigation percent?)
 (s/def :unit/class (into #{} unit-class))
-(comment
- ;; in combat specs
-  (s/def :unit/faction #{:attacker :defender})
-  ,)
+(s/def :unit/faction #{:attacker :defender})
+(s/def :unit/current-health (s/int-in 100 1001))
 
 (s/def :unit/unit
   (s/keys
@@ -75,6 +73,26 @@
     :unit/survival
     :unit/mitigation
     :unit/class]))
+
+(s/def :unit/combatunit
+  (s/and
+   (s/keys
+    :req
+    [:unit/faction
+     :unit/current-health
+     :unit/id
+     :unit/name
+     :unit/health
+     :unit/damage
+     :unit/speed
+     :unit/accuracy
+     :unit/critical-chance
+     :unit/critical-multiplier
+     :unit/evasion
+     :unit/survival
+     :unit/mitigation
+     :unit/class])
+   #(<= (:unit/current-health %) (:unit/health %))))
 
 (defn roll-dice
   [success-prob]

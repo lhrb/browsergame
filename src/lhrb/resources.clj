@@ -47,11 +47,26 @@
                            :production/multiplier 1.5}]
     :building/cost-upgrade {:resource/gold 10}}])
 
+
+;; using a closure here to simplify the interface for the caller
+;; not sure if this is a good design. Will maybe change in future.
+
 (defn index-by-name [buildings]
   (reduce (fn [acc elem]
             (assoc acc (:building/name elem) elem))
           {} buildings))
 
+(def mem-index-by-name (memoize index-by-name))
+
+(def building-by-name
+  (partial
+   (fn [buildings name] (get (mem-index-by-name buildings) name))
+   buildings))
+
+(comment
+  (building-by-name "lumber")
+  ,)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn charge-cost
    "calculates the resources after decreasing by the given cost"
@@ -59,27 +74,60 @@
    (reduce-kv (fn [m k v]
                 (update m k #(- % v))) resources cost))
 
- (defn able-to-pay?
-   "determines if the player is able to pay the cost"
-   [resources cost]
-   (->> (charge-cost resources cost)
-        (vals)
-        (every? nat-int?)))
+(defn able-to-pay?
+  "determines if the player is able to pay the cost"
+  [resources cost]
+  (->> (charge-cost resources cost)
+       (vals)
+       (every? nat-int?)))
 
- (defn build
-   "adds a new building to the player
+(defn build
+  "adds a new building to the player
   TODO check able-to-pay?"
-   [building player]
-   (let [resources (charge-cost (:player/resources player)
-                                (:building/cost-build building))
-         new-building (merge
+  [building player]
+  (let [resources (charge-cost (:player/resources player)
+                               (:building/cost-build building))
+        new-building (merge
                       (select-keys building [:building/name])
                       {:building/level 1})]
-     (-> player
-         (update :player/buildings conj new-building)
-         (assoc :player/resources resources))))
+    (-> player
+        (update :player/buildings conj new-building)
+        (assoc :player/resources resources))))
+
+(defn upgrade
+  "upgrades the building identified by the building-id"
+  [building-id player])
+
+(defn produce
+  "calculates the resources after production
+  (produce {:a 1 :b 2} {:a 2 :b 3})
+  "
+  [resources production]
+  (reduce-kv (fn [m k v]
+               (update m k #(+ % v))) resources production))
+
+(defn base-building?
+  "a base buildings does not consume resources
+  thinking about that this should only be the farm itself?
+  "
+  [buildings]
+  (remove (fn [b] (contains? b :buildings/consumption)) buildings))
 
 
+(defn production-loop
+  "multiple parts
+  1. look for buildings without resource-consumption =>
+     those are able to produce without any further requirements
+  2. go through all other buildings =>
+     a) maybe use priorization
+     b) when enough resources are available
+        - consume resources
+        - put to 'produce queue'
+  3. work through the 'produce-queue'
+  "
+  [buildings]
+  (let [production-queue (base-building? buildings)]
+    ))
 
 
 (comment

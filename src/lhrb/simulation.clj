@@ -45,9 +45,9 @@
   [price-table]
   (apply + (vals price-table)))
 
-;; ------------------------------------
-;; Buy resources from the vendor
-;; ------------------------------------
+;; -------------------------------------
+;; Buy resources from the vendors
+;; -------------------------------------
 
 (defn- buy-resource
   [price-table resource vendor]
@@ -99,19 +99,25 @@
 
 ;; -------------------------------------
 ;; Sell the assembled parts
+;; TODO better name for "building block"
 ;; -------------------------------------
 
 (defn- sell-building-block
+  "add building block to the vendor inventory and pay the price
+  does not check if vendor has enough money"
   [price vendor]
   (-> vendor
    (update-in [:vendor/inventory :building-block] (fnil inc 0))
    (update-in [:vendor/money] (fnil #(- % price) 0))))
 
 (defn enough-money-for-building-block?
+  "tests if the vendor has enough money to pay the price"
   [price vendor]
   (<= price (:vendor/money vendor)))
 
 (defn sell-blocks
+  "iterate through the vendors and sell them the 'building blocks'
+  - shuffle the vendor list for fairness"
   [price-table amount vendors]
  (let [vendors (shuffle vendors)
        price (set-price price-table)
@@ -120,7 +126,8 @@
           v (filter enough-money? vendors)
           a (remove enough-money? vendors)]
      (if (or (= n 0) (empty? v))
-       {:amount-left n :vendors (concat v a)}
+       {:sell-result/amount-left n
+        :sell-result/vendors (concat v a)}
        (let [[vendor & rst] v
              vendor' (sell-building-block price vendor)]
          (recur (dec n)
@@ -131,6 +138,39 @@
                   a
                   (conj a vendor'))))))))
 
+;; -------------------------------------
+;; Update price-table
+;; -------------------------------------
+
+(defn price-change
+  "if a vendor sold all resources the price goes up,
+  else it goes down"
+  [leftover]
+  (->> leftover (map (fn [x] (case x 0 1 -1))) (apply +)))
+
+(defn add-with-min-val
+  "add x and y and choose the max between the result and 1"
+  [x y]
+  (max 1 (+ x y)))
+
+(defn calculate-new-price-table
+  "after the trade every vendor has either sold everything
+  she got from the particular resource or has some leftovers.
+  For every vendor who have sold everything the price goes one up
+  and for every vendor who has some leftovers the price goes one down."
+  [price-table vendors]
+  (->> vendors
+       (map :vendor/inventory)
+       (map (fn [m] (select-keys m [:resource/a
+                                   :resource/b
+                                   :resource/c
+                                   :resource/d
+                                   :resource/e])))
+       (apply merge-with
+              (fn [x y] (if (coll? x) (cons y x) (list y x))))
+       (reduce-kv (fn [m k v]
+                    (assoc m k (price-change v))) {})
+       (merge-with add-with-min-val price-table)))
 
 (comment
 
@@ -145,14 +185,15 @@
 
   (buy-from-vendors price-table resource (count-full-sets market) vendors)
 
-  (<= 0 0)
-
-  (let [[h & rst] [1 2 3 4 5 6]]
-    (conj (vec rst) h))
-
-  (conj [1 2 3 4 5 6 7 7 8 8 9 2 3 4 5 1 21 2 1] 31)
-
-  (concat '(1 2 3) '(4 5))
   (buy-resource price-table :resource/a vendor)
-  ,
-  )
+
+
+  (->> vendors
+       (buy-resources price-table)
+       (sell-blocks price-table (count-full-sets market))
+       :sell-result/vendors
+       (calculate-new-price-table price-table))
+
+
+
+  ,)

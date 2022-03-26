@@ -1,5 +1,13 @@
 (ns lhrb.resources)
 
+;; ------------------------------------------------
+;;
+;; This is was first draft/experiment/exploration
+;;
+;; currently it is not planned to use this implementation anymore
+;;
+;; -------------------------------------------------
+
 (def buildings
   ;; TODO maybe add smth like :building/consumption (negative production)
   [{:building/name "lumber"

@@ -2,34 +2,38 @@
   (:require [clojure.spec.gen.alpha :as gen]
             [clojure.spec.alpha :as s]))
 
-(s/def :resource/a (s/and nat-int? #(< % 10)))
-(s/def :resource/b (s/and nat-int? #(< % 10)))
-(s/def :resource/c (s/and nat-int? #(< % 10)))
-(s/def :resource/d (s/and nat-int? #(< % 10)))
-(s/def :resource/e (s/and nat-int? #(< % 10)))
+(s/def :resource/food (s/and nat-int? #(< % 10)))
+(s/def :resource/mana (s/and nat-int? #(< % 10)))
+(s/def :resource/technology (s/and nat-int? #(< % 10)))
+(s/def :resource/culture (s/and nat-int? #(< % 10)))
+(s/def :resource/religion (s/and nat-int? #(< % 10)))
 
-(defn resources []
-  (gen/generate (s/gen (s/keys :req [:resource/a :resource/b :resource/c :resource/d :resource/e]))))
+(s/def :vendor/resources (s/keys :req [:resource/food
+                                       :resource/mana
+                                       :resource/technology
+                                       :resource/culture
+                                       :resource/religion]))
 
-(s/def :vendor/inventory (s/keys :req [:resource/a :resource/b :resource/c :resource/d :resource/e]))
-(s/def :vendor/money nat-int?)
+(s/def :currency/gold (s/and nat-int? #(< % 1000)))
+(s/def :currency/civ (s/and nat-int? #(< % 10)))
+(s/def :vendor/currency (s/keys :req [:currency/gold :currency/civ]))
 
 (defn gen-vendor []
-  (gen/generate (s/gen (s/keys :req [:vendor/inventory :vendor/money]))))
+  (gen/generate (s/gen (s/keys :req [:vendor/resources :vendor/currency]))))
 
 (defn max-revenue
   "max revenue a agent can get, when she sells everything"
   [prices vendor]
   (reduce-kv (fn [acc k v] (+ acc (* (k prices) v)))
              0
-             (:vendor/inventory vendor)))
+             (:vendor/resources vendor)))
 
 (defn add-to-volume
   "adds the agent inventory to the market"
   [market vendor]
   (reduce-kv (fn [m k v] (update m k (fnil + 0) v))
              market
-             (:vendor/inventory vendor)))
+             (:vendor/resources vendor)))
 
 (defn market-volume
   [vendors]
@@ -52,18 +56,18 @@
 (defn- buy-resource
   [price-table resource vendor]
   (-> vendor
-   (update-in [:vendor/inventory resource] (fnil dec 0))
-   (update-in [:vendor/money] (fnil #(+ (get price-table resource) %) 0))))
+   (update-in [:vendor/resources resource] (fnil dec 0))
+   (update-in [:vendor/currency :currency/gold] (fnil #(+ (get price-table resource) %) 0))))
 
 (defn out-of-stock?
   "test if the given resource is out of stock"
   [resource vendor]
-  (= 0 (get-in vendor [:vendor/inventory resource])))
+  (= 0 (get-in vendor [:vendor/resources resource])))
 
 (defn in-stock?
   "test if the given resource is in stock"
   [resource vendor]
-  (< 0 (get-in vendor [:vendor/inventory resource])))
+  (< 0 (get-in vendor [:vendor/resources resource])))
 
 (defn- buy-from-vendors
   "get the given amount of the resource from the list of vendors
@@ -95,33 +99,33 @@
        amount (count-full-sets volume)]
    (reduce (fn [v res] (buy-from-vendors price-table res amount v))
            vendors
-           [:resource/a :resource/b :resource/c :resource/d :resource/e])))
+           [:resource/food :resource/mana :resource/technology :resource/culture :resource/religion])))
 
 ;; -------------------------------------
 ;; Sell the assembled parts
 ;; TODO better name for "building block"
 ;; -------------------------------------
 
-(defn- sell-building-block
+(defn- sell-civ-tokens
   "add building block to the vendor inventory and pay the price
   does not check if vendor has enough money"
   [price vendor]
   (-> vendor
-   (update-in [:vendor/inventory :building-block] (fnil inc 0))
-   (update-in [:vendor/money] (fnil #(- % price) 0))))
+   (update-in [:vendor/currency :currency/civ] (fnil inc 0))
+   (update-in [:vendor/currency :currency/gold] (fnil #(- % price) 0))))
 
-(defn enough-money-for-building-block?
+(defn enough-money-for-civ-token?
   "tests if the vendor has enough money to pay the price"
   [price vendor]
-  (<= price (:vendor/money vendor)))
+  (<= price (get-in vendor [:vendor/currency :currency/gold])))
 
-(defn sell-blocks
+(defn sell-tokens
   "iterate through the vendors and sell them the 'building blocks'
   - shuffle the vendor list for fairness"
   [price-table amount vendors]
  (let [vendors (shuffle vendors)
        price (set-price price-table)
-       enough-money? (partial enough-money-for-building-block? price)]
+       enough-money? (partial enough-money-for-civ-token? price)]
    (loop [n amount
           v (filter enough-money? vendors)
           a (remove enough-money? vendors)]
@@ -129,7 +133,7 @@
        {:sell-result/amount-left n
         :sell-result/vendors (concat v a)}
        (let [[vendor & rst] v
-             vendor' (sell-building-block price vendor)]
+             vendor' (sell-civ-tokens price vendor)]
          (recur (dec n)
                 (if (enough-money? vendor')
                   (conj (vec rst) vendor')
@@ -160,12 +164,12 @@
   and for every vendor who has some leftovers the price goes one down."
   [price-table vendors]
   (->> vendors
-       (map :vendor/inventory)
-       (map (fn [m] (select-keys m [:resource/a
-                                   :resource/b
-                                   :resource/c
-                                   :resource/d
-                                   :resource/e])))
+       (map :vendor/resources)
+       (map (fn [m] (select-keys m [:resource/food
+                                   :resource/mana
+                                   :resource/technology
+                                   :resource/culture
+                                   :resource/religion])))
        (apply merge-with
               (fn [x y] (if (coll? x) (cons y x) (list y x))))
        (reduce-kv (fn [m k v]
@@ -174,10 +178,10 @@
 
 (comment
 
-  (def price-table #:resource{:a 20, :b 20, :c 20, :d 20, :e 20})
+  (def price-table #:resource{:food 20, :mana 20, :technology 20, :culture 20, :religion 20})
   (def vendor (gen-vendor))
   (def broker {})
-  (def resource :resource/a)
+  (def resource :resource/food)
   (def vendors [(gen-vendor) (gen-vendor) (gen-vendor)])
   (def market (market-volume vendors))
   (count-full-sets market)
@@ -185,12 +189,12 @@
 
   (buy-from-vendors price-table resource (count-full-sets market) vendors)
 
-  (buy-resource price-table :resource/a vendor)
+  (buy-resource price-table :resource/food vendor)
 
 
   (->> vendors
        (buy-resources price-table)
-       (sell-blocks price-table (count-full-sets market))
+       (sell-tokens price-table (count-full-sets market))
        :sell-result/vendors
        (calculate-new-price-table price-table))
 

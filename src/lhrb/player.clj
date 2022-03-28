@@ -173,6 +173,9 @@
 
   (production building)
 
+  (production-from-buildings buildings)
+
+
 
 
 

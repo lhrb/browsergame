@@ -1,4 +1,6 @@
-(ns lhrb.player)
+(ns lhrb.player
+  (:require [clojure.spec.gen.alpha :as gen]
+            [clojure.spec.alpha :as s]))
 
 (defn distribution
   "generate a distribution of n points to the amount of given bins
@@ -23,7 +25,38 @@
                            :skill/preaching]
                           (distribution skillpoints 5))})
 
+(s/def :building/name #{:building/cathedral
+                        :building/greenhouse
+                        :building/mageguild
+                        :building/theater
+                        :building/laboratory})
 
+(def skill-for-building {:building/greenhouse :skill/green-thumb
+                         :building/mageguild :skill/sorcery
+                         :building/laboratory :skill/experimentation
+                         :building/theater :skill/storytelling
+                         :building/cathedral :skill/preaching})
+
+(def resource-from-building {:building/greenhouse :resource/food
+                             :building/mageguild :resource/mana
+                             :building/laboratory :resource/technology
+                             :building/theater :resource/culture
+                             :building/cathedral :resource/religion})
+
+(defn production
+  "Calculates the resource production for the given building."
+  [building]
+  (let [name (get-in building [:building/name])
+        skill (get skill-for-building name)
+        resource (get resource-from-building name)]
+    {resource (->> (get building :building/worker)
+                   (map (fn [w] (get-in w [:worker/skills skill])))
+                   (apply +))}))
+
+(defn production-from-buildings
+  "Calculates the resource production from all buildings"
+  [buildings]
+  (reduce (fn [m b] (merge m (production b))) {} buildings))
 
 
 (comment
@@ -55,6 +88,7 @@
 
 
   (def conn (d/get-conn "/tmp/datalevin/mydb3" schema))
+  (d/clear conn)
 
 
   (d/transact! conn [{:account/name "Peter" :account/password "1234"}])
@@ -64,12 +98,16 @@
   (d/transact! conn [{:player/name "horst"
                       :player/worker [(worker "Holga" 20) (worker "Jasmin" 20)]}])
 
+  (d/transact! conn [{:building/name "Cathedral"
+                      :building/worker [2 3]}])
+
+  (d/transact! conn [[:db/retract 4 :building/worker 2]])
 
   (d/q '[:find [(pull ?e [*])]
          :where [?e :worker/name  "Jasmin"]]
        (d/db conn))
 
-  (d/pull-many (d/db conn) '[*] [1 2 3])
+  (d/pull-many (d/db conn) '[*] [1 2 3 4])
 
   (d/q '[:find [(pull ?e [*])]
          :where [?e :account/name "Peter"]]
@@ -93,6 +131,48 @@
   (d/listen! conn :log
              (fn [tx-report]
                (clojure.pprint/pprint tx-report)))
+
+  (def building
+    {:building/name :building/mageguild
+     :building/worker [(worker "Peter" 20) (worker "Eskarina" 20)]})
+
+  (def buildings
+    [#:building{:name :building/greenhouse,
+                :worker
+                [#:worker{:name "Ursel",
+                          :skills
+                          #:skill{:green-thumb 2,
+                                  :sorcery 9,
+                                  :experimentation 3,
+                                  :storytelling 5,
+                                  :preaching 1}}
+                 #:worker{:name "Jasmin",
+                          :skills
+                          #:skill{:green-thumb 1,
+                                  :sorcery 1,
+                                  :experimentation 2,
+                                  :storytelling 1,
+                                  :preaching 15}}]}
+     #:building{:name :building/mageguild,
+           :worker
+           [#:worker{:name "Peter",
+                     :skills
+                     #:skill{:green-thumb 9,
+                             :sorcery 2,
+                             :experimentation 1,
+                             :storytelling 7,
+                             :preaching 1}}
+            #:worker{:name "Eskarina",
+                     :skills
+                     #:skill{:green-thumb 2,
+                             :sorcery 11,
+                             :experimentation 1,
+                             :storytelling 1,
+                             :preaching 5}}]}
+     #:building{:name :building/cathedral}])
+
+  (production building)
+
 
 
 

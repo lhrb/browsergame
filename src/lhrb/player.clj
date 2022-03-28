@@ -58,10 +58,60 @@
   [buildings]
   (reduce (fn [m b] (merge m (production b))) {} buildings))
 
+(defn production-player
+  "Calculates the resources and currency from the player for this round"
+  [player]
+  (let [produced-resources (production-from-buildings (:player/buildings player))
+        combined (merge-with + produced-resources (:player/resources player))
+        civ (apply min (vals combined))]
+    (-> player
+        (update-in [:player/currency :currency/civ] #(+ % civ))
+        (assoc-in [:player/resources]
+                  (reduce-kv (fn [m k v] (assoc m k (- v civ))) {} combined)))))
 
 (comment
   (= 20 (apply + (distribution 20 5)))
   (worker "X" 20)
+
+  (def player
+    {:player/resources #:resource{:food 5, :mana 0, :technology 1, :culture 2, :religion 4}
+     :player/currency #:currency{:gold 345, :civ 3}
+     :player/buildings [#:building{:name :building/greenhouse,
+                                   :worker
+                                   [#:worker{:name "Ursel",
+                                             :skills
+                                             #:skill{:green-thumb 2,
+                                                     :sorcery 9,
+                                                     :experimentation 3,
+                                                     :storytelling 5,
+                                                     :preaching 1}}
+                                    #:worker{:name "Jasmin",
+                                             :skills
+                                             #:skill{:green-thumb 1,
+                                                     :sorcery 1,
+                                                     :experimentation 2,
+                                                     :storytelling 1,
+                                                     :preaching 15}}]}
+                        #:building{:name :building/mageguild,
+                                   :worker
+                                   [#:worker{:name "Peter",
+                                             :skills
+                                             #:skill{:green-thumb 9,
+                                                     :sorcery 2,
+                                                     :experimentation 1,
+                                                     :storytelling 7,
+                                                     :preaching 1}}
+                                    #:worker{:name "Eskarina",
+                                             :skills
+                                             #:skill{:green-thumb 2,
+                                                     :sorcery 11,
+                                                     :experimentation 1,
+                                                     :storytelling 1,
+                                                     :preaching 5}}]}
+                        #:building{:name :building/cathedral}]})
+
+  (production-player player)
+
 
 
   (require '[datalevin.core :as d])
@@ -131,51 +181,6 @@
   (d/listen! conn :log
              (fn [tx-report]
                (clojure.pprint/pprint tx-report)))
-
-  (def building
-    {:building/name :building/mageguild
-     :building/worker [(worker "Peter" 20) (worker "Eskarina" 20)]})
-
-  (def buildings
-    [#:building{:name :building/greenhouse,
-                :worker
-                [#:worker{:name "Ursel",
-                          :skills
-                          #:skill{:green-thumb 2,
-                                  :sorcery 9,
-                                  :experimentation 3,
-                                  :storytelling 5,
-                                  :preaching 1}}
-                 #:worker{:name "Jasmin",
-                          :skills
-                          #:skill{:green-thumb 1,
-                                  :sorcery 1,
-                                  :experimentation 2,
-                                  :storytelling 1,
-                                  :preaching 15}}]}
-     #:building{:name :building/mageguild,
-           :worker
-           [#:worker{:name "Peter",
-                     :skills
-                     #:skill{:green-thumb 9,
-                             :sorcery 2,
-                             :experimentation 1,
-                             :storytelling 7,
-                             :preaching 1}}
-            #:worker{:name "Eskarina",
-                     :skills
-                     #:skill{:green-thumb 2,
-                             :sorcery 11,
-                             :experimentation 1,
-                             :storytelling 1,
-                             :preaching 5}}]}
-     #:building{:name :building/cathedral}])
-
-  (production building)
-
-  (production-from-buildings buildings)
-
-
 
 
 

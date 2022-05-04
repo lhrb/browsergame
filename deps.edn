@@ -16,7 +16,8 @@
         org.slf4j/log4j-over-slf4j {:mvn/version "1.7.35"}
         buddy/buddy-auth {:mvn/version "3.0.323"}
         buddy/buddy-hashers {:mvn/version "1.8.158"}
-        hiccup/hiccup {:mvn/version "2.0.0-alpha2"}}
+        hiccup/hiccup {:mvn/version "2.0.0-alpha2"}
+        club.donutpower/system {:mvn/version "0.0.127"}}
 
  :aliases
  {:dev  {:jvm-opts ["--add-opens=java.base/java.nio=ALL-UNNAMED"

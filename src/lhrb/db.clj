@@ -1,6 +1,8 @@
 (ns lhrb.db
   (:require [datalevin.core :as d]))
 
+(def alg {:alg :bcrypt+sha512})
+
 (def schema {:account/name {:db/valueType :db.type/string
                               :db/cardinality :db.cardinality/one
                               :db/unique    :db.unique/identity}
@@ -20,17 +22,19 @@
              :building/worker {:db/valueType :db.type/ref
                                :db/cardinality :db.cardinality/many}})
 
+;;--------------------------------------------------------------------
 ;; account
+;; -------------------------------------------------------------------
 
 (defn insert-account!
   [db {:keys [name password] :as account}]
   (d/transact! db [{:account/name name :account/password password}]))
 
-(defn- create-account!
+(defn create-account!
   "encrypts the password"
   [db {:keys [name password]}]
   (d/transact! db [{:account/name name
-                    :account/password (buddy.hashers/derive password {:alg :bcrypt+sha512})}]))
+                    :account/password (buddy.hashers/derive password alg)}]))
 
 (defn account?
   [db {:keys [name password]}]
@@ -44,7 +48,17 @@
    (d/db db)
    name password))
 
-(def conn (d/get-conn "/tmp/datalevin/bg1" schema))
+
+;;--------------------------------------------------------------------
+;; db lifecycle
+;; -------------------------------------------------------------------
+
+(defn create-db [db-path]
+  (d/get-conn db-path schema))
+
+(defn close [conn]
+  (d/close conn))
+
 
 ;(create-account! conn {:name "Hans" :password "12343"})
 (comment

@@ -34,9 +34,13 @@
                            server/start))
               :stop (fn [_ instance _] (server/stop instance))}}}})
 
+(def running-system (ds/signal system :start))
+
+(defn db-conn [running-system]
+  (get-in (::ds/instances running-system) [:app :db]))
+
 
 (comment
-  (def running-system (ds/signal system :start))
 
   (ds/signal running-system :stop)
 

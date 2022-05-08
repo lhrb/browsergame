@@ -6,7 +6,8 @@
             [buddy.auth.middleware :as auth.middleware]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.interceptor.chain :as interceptor.chain]
-            [io.pedestal.interceptor.error :refer [error-dispatch]]))
+            [io.pedestal.interceptor.error :refer [error-dispatch]]
+            [lhrb.db :refer [account?]]))
 
 (def auth-backend (auth.backends/session))
 
@@ -64,8 +65,10 @@
        [:p {:id "the-date"}  "today"]]]))))
 
 (defn login
-  [request]
-  {:status 303
-   :headers {"Location" "/login"}
-   :body "See Other"
-   :session {:identity "gmw"}})
+  [{:keys [db form-params]}]
+  (if-let [account-id (account? db form-params)]
+    {:status 303
+     :headers {"Location" "/login"}
+     :body "See Other"
+     :session {:identity account-id}}
+    (ring-resp/not-found "not found")))

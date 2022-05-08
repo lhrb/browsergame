@@ -13,11 +13,10 @@
             [io.pedestal.http.sse :as sse]
             [clojure.core.async :as async]
             [clojure.core.async.impl.protocols :as chan]
-            [lhrb.auth :refer [login-page login authentication-interceptor authorization-interceptor]]))
+            [lhrb.auth :refer [login-page login authentication-interceptor authorization-interceptor]]
+            [lhrb.system :refer [running-system db-conn]]))
 
 (def hash-alg {:alg :bcrypt+sha512})
-
-(def db {:bla 1})
 
 (def users
   "A sample user store."
@@ -103,7 +102,7 @@
                           (middlewares/session {:store (cookie/cookie-store)})
                           authentication-interceptor
                           authorization-interceptor
-                          (db-interceptor db)])
+                          (db-interceptor (db-conn running-system))])
 
 (def routes #{["/" :get (conj common-interceptors `home)]
               ["/admin" :get (conj common-interceptors `admin)]

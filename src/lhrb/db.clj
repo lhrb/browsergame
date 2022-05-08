@@ -37,6 +37,7 @@
                     :account/password (buddy.hashers/derive password alg)}]))
 
 (defn account?
+  "checks if account exists and returns the account id"
   [db {:keys [name password]}]
   (d/q
    '[:find [?acc]
